@@ -7,6 +7,7 @@ var expect     = require('chai').expect;
 var assertFile = require('../helpers/assert-file');
 var conf       = require('../helpers/conf');
 var ember      = require('../helpers/ember');
+var existsSync = require('exists-sync');
 var fs         = require('fs-extra');
 var outputFile = Promise.denodeify(fs.outputFile);
 var path       = require('path');
@@ -52,9 +53,44 @@ describe('Acceptance: ember destroy', function() {
     ]);
   }
 
+  function initAddon() {
+    return ember([
+      'addon',
+      'my-addon',
+      '--skip-npm',
+      '--skip-bower'
+    ]);
+  }
+
+  function initInRepoAddon() {
+    return initApp().then(function() {
+      return ember([
+        'generate',
+        'in-repo-addon',
+        'my-addon'
+      ]);
+    });
+  }
+
   function generate(args) {
     var generateArgs = ['generate'].concat(args);
     return ember(generateArgs);
+  }
+
+  function generateInAddon(args) {
+    var generateArgs = ['generate'].concat(args);
+
+    return initAddon().then(function() {
+      return ember(generateArgs);
+    });
+  }
+
+  function generateInRepoAddon(args) {
+    var generateArgs = ['generate'].concat(args);
+
+    return initInRepoAddon().then(function() {
+      return ember(generateArgs);
+    });
   }
 
   function destroy(args) {
@@ -64,7 +100,7 @@ describe('Acceptance: ember destroy', function() {
 
   function assertFileNotExists(file) {
     var filePath = path.join(process.cwd(), file);
-    expect(!fs.existsSync(filePath), 'expected ' + file + ' not to exist');
+    expect(!existsSync(filePath), 'expected ' + file + ' not to exist');
   }
 
   function assertFilesExist(files) {
@@ -86,12 +122,45 @@ describe('Acceptance: ember destroy', function() {
       .then(function() {
         return destroy(args);
       })
+      .then(function(result) {
+        expect(result, 'destroy command did not exit with errorCode').to.be.an('object');
+        assertFilesNotExist(files);
+      });
+  }
+
+  function assertDestroyAfterGenerateInAddon(args, files) {
+    return initAddon()
       .then(function() {
+        return generateInAddon(args);
+      })
+      .then(function() {
+        assertFilesExist(files);
+      })
+      .then(function() {
+        return destroy(args);
+      })
+      .then(function(result) {
+        expect(result, 'destroy command did not exit with errorCode').to.be.an('object');
+        assertFilesNotExist(files);
+      });
+  }
+
+  function assertDestroyAfterGenerateInRepoAddon(args, files) {
+    return generateInRepoAddon(args)
+      .then(function() {
+        assertFilesExist(files);
+      })
+      .then(function() {
+        return destroy(args);
+      })
+      .then(function(result) {
+        expect(result, 'destroy command did not exit with errorCode').to.be.an('object');
         assertFilesNotExist(files);
       });
   }
 
   it('controller foo', function() {
+    this.timeout(20000);
     var commandArgs = ['controller', 'foo'];
     var files       = [
       'app/controllers/foo.js',
@@ -102,6 +171,7 @@ describe('Acceptance: ember destroy', function() {
   });
 
   it('controller foo/bar', function() {
+    this.timeout(20000);
     var commandArgs = ['controller', 'foo/bar'];
     var files       = [
       'app/controllers/foo/bar.js',
@@ -112,6 +182,7 @@ describe('Acceptance: ember destroy', function() {
   });
 
   it('component x-foo', function() {
+    this.timeout(20000);
     var commandArgs = ['component', 'x-foo'];
     var files       = [
       'app/components/x-foo.js',
@@ -123,6 +194,7 @@ describe('Acceptance: ember destroy', function() {
   });
 
   it('helper foo-bar', function() {
+    this.timeout(20000);
     var commandArgs = ['helper', 'foo-bar'];
     var files       = [
       'app/helpers/foo-bar.js',
@@ -133,6 +205,7 @@ describe('Acceptance: ember destroy', function() {
   });
 
   it('helper foo/bar-baz', function() {
+    this.timeout(20000);
     var commandArgs = ['helper', 'foo/bar-baz'];
     var files       = [
       'app/helpers/foo/bar-baz.js',
@@ -143,6 +216,7 @@ describe('Acceptance: ember destroy', function() {
   });
 
   it('model foo', function() {
+    this.timeout(20000);
     var commandArgs = ['model', 'foo'];
     var files       = [
       'app/models/foo.js',
@@ -153,6 +227,7 @@ describe('Acceptance: ember destroy', function() {
   });
 
   it('model foo/bar', function() {
+    this.timeout(20000);
     var commandArgs = ['model', 'foo/bar'];
     var files       = [
       'app/models/foo/bar.js',
@@ -163,6 +238,7 @@ describe('Acceptance: ember destroy', function() {
   });
 
   it('route foo', function() {
+    this.timeout(20000);
     var commandArgs = ['route', 'foo'];
     var files       = [
       'app/routes/foo.js',
@@ -170,42 +246,16 @@ describe('Acceptance: ember destroy', function() {
       'tests/unit/routes/foo-test.js'
     ];
 
-    return assertDestroyAfterGenerate(commandArgs, files);
-  });
-
-  it('route foo --type=resource', function() {
-    var commandArgs = ['route', 'foo', '--type=resource'];
-    var files       = [
-      'app/routes/foo.js',
-      'app/templates/foo.hbs',
-      'tests/unit/routes/foo-test.js'
-    ];
-
     return assertDestroyAfterGenerate(commandArgs, files)
       .then(function() {
         assertFile('app/router.js', {
-          doesNotContain: "this.resource('foo');"
-        });
-      });
-  });
-
-  it('route foos --type=resource', function() {
-    var commandArgs = ['route', 'foos', '--type=resource'];
-    var files       = [
-      'app/routes/foos.js',
-      'app/templates/foos.hbs',
-      'tests/unit/routes/foos-test.js'
-    ];
-
-    return assertDestroyAfterGenerate(commandArgs, files)
-      .then(function() {
-        assertFile('app/router.js', {
-          doesNotContain: "this.resource('foos');"
+          doesNotContain: "this.route('foo');"
         });
       });
   });
 
   it('route index', function() {
+    this.timeout(20000);
     var commandArgs = ['route', 'index'];
     var files       = [
       'app/routes/index.js',
@@ -217,6 +267,7 @@ describe('Acceptance: ember destroy', function() {
   });
 
   it('route basic', function() {
+    this.timeout(20000);
     var commandArgs = ['route', 'basic'];
     var files       = [
       'app/routes/basic.js',
@@ -228,6 +279,7 @@ describe('Acceptance: ember destroy', function() {
   });
 
   it('resource foo', function() {
+    this.timeout(20000);
     var commandArgs = ['resource', 'foo'];
     var files       = [
       'app/models/foo.js',
@@ -240,12 +292,13 @@ describe('Acceptance: ember destroy', function() {
     return assertDestroyAfterGenerate(commandArgs, files)
       .then(function() {
         assertFile('app/router.js', {
-          doesNotContain: "this.resource('foo');"
+          doesNotContain: "this.route('foo');"
         });
       });
   });
 
   it('resource foos', function() {
+    this.timeout(20000);
     var commandArgs = ['resource', 'foos'];
     var files       = [
       'app/models/foo.js',
@@ -258,12 +311,13 @@ describe('Acceptance: ember destroy', function() {
     return assertDestroyAfterGenerate(commandArgs, files)
       .then(function() {
         assertFile('app/router.js', {
-          doesNotContain: "this.resource('foos');"
+          doesNotContain: "this.route('foos');"
         });
       });
   });
 
   it('template foo', function() {
+    this.timeout(20000);
     var commandArgs = ['template', 'foo'];
     var files       = ['app/templates/foo.hbs'];
 
@@ -271,6 +325,7 @@ describe('Acceptance: ember destroy', function() {
   });
 
   it('template foo/bar', function() {
+    this.timeout(20000);
     var commandArgs = ['template', 'foo/bar'];
     var files       = ['app/templates/foo/bar.hbs'];
 
@@ -278,6 +333,7 @@ describe('Acceptance: ember destroy', function() {
   });
 
   it('view foo', function() {
+    this.timeout(20000);
     var commandArgs = ['view', 'foo'];
     var files       = [
       'app/views/foo.js',
@@ -288,6 +344,7 @@ describe('Acceptance: ember destroy', function() {
   });
 
   it('view foo/bar', function() {
+    this.timeout(20000);
     var commandArgs = ['view', 'foo/bar'];
     var files       = [
       'app/views/foo/bar.js',
@@ -298,6 +355,7 @@ describe('Acceptance: ember destroy', function() {
   });
 
   it('initializer foo', function() {
+    this.timeout(20000);
     var commandArgs = ['initializer', 'foo'];
     var files       = ['app/initializers/foo.js'];
 
@@ -305,6 +363,7 @@ describe('Acceptance: ember destroy', function() {
   });
 
   it('initializer foo/bar', function() {
+    this.timeout(20000);
     var commandArgs = ['initializer', 'foo/bar'];
     var files       = ['app/initializers/foo/bar.js'];
 
@@ -312,6 +371,7 @@ describe('Acceptance: ember destroy', function() {
   });
 
   it('mixin foo', function() {
+    this.timeout(20000);
     var commandArgs = ['mixin', 'foo'];
     var files       = [
       'app/mixins/foo.js',
@@ -322,6 +382,7 @@ describe('Acceptance: ember destroy', function() {
   });
 
   it('mixin foo/bar', function() {
+    this.timeout(20000);
     var commandArgs = ['mixin', 'foo/bar'];
     var files       = [
       'app/mixins/foo/bar.js',
@@ -332,6 +393,7 @@ describe('Acceptance: ember destroy', function() {
   });
 
   it('adapter foo', function() {
+    this.timeout(20000);
     var commandArgs = ['adapter', 'foo'];
     var files       = ['app/adapters/foo.js'];
 
@@ -339,6 +401,7 @@ describe('Acceptance: ember destroy', function() {
   });
 
   it('adapter foo/bar', function() {
+    this.timeout(20000);
     var commandArgs = ['adapter', 'foo/bar'];
     var files       = ['app/adapters/foo/bar.js'];
 
@@ -346,6 +409,7 @@ describe('Acceptance: ember destroy', function() {
   });
 
   it('serializer foo', function() {
+    this.timeout(20000);
     var commandArgs = ['serializer', 'foo'];
     var files       = [
       'app/serializers/foo.js',
@@ -356,6 +420,7 @@ describe('Acceptance: ember destroy', function() {
   });
 
   it('serializer foo/bar', function() {
+    this.timeout(20000);
     var commandArgs = ['serializer', 'foo/bar'];
     var files       = [
       'app/serializers/foo/bar.js',
@@ -366,6 +431,7 @@ describe('Acceptance: ember destroy', function() {
   });
 
   it('transform foo', function() {
+    this.timeout(20000);
     var commandArgs = ['transform', 'foo'];
     var files       = [
       'app/transforms/foo.js',
@@ -376,6 +442,7 @@ describe('Acceptance: ember destroy', function() {
   });
 
   it('transform foo/bar', function() {
+    this.timeout(20000);
     var commandArgs = ['transform', 'foo/bar'];
     var files       = [
       'app/transforms/foo/bar.js',
@@ -386,6 +453,7 @@ describe('Acceptance: ember destroy', function() {
   });
 
   it('util foo-bar', function() {
+    this.timeout(20000);
     var commandArgs = ['util', 'foo-bar'];
     var files       = [
       'app/utils/foo-bar.js',
@@ -396,6 +464,7 @@ describe('Acceptance: ember destroy', function() {
   });
 
   it('util foo-bar/baz', function() {
+    this.timeout(20000);
     var commandArgs = ['util', 'foo/bar-baz'];
     var files       = [
       'app/utils/foo/bar-baz.js',
@@ -406,10 +475,10 @@ describe('Acceptance: ember destroy', function() {
   });
 
   it('service foo', function() {
+    this.timeout(20000);
     var commandArgs = ['service', 'foo'];
     var files       = [
       'app/services/foo.js',
-      'app/initializers/foo-service.js',
       'tests/unit/services/foo-test.js'
     ];
 
@@ -417,10 +486,10 @@ describe('Acceptance: ember destroy', function() {
   });
 
   it('service foo/bar', function() {
+    this.timeout(20000);
     var commandArgs = ['service', 'foo/bar'];
     var files       = [
       'app/services/foo/bar.js',
-      'app/initializers/foo/bar-service.js',
       'tests/unit/services/foo/bar-test.js'
     ];
 
@@ -428,6 +497,7 @@ describe('Acceptance: ember destroy', function() {
   });
 
   it('blueprint foo', function() {
+    this.timeout(20000);
     var commandArgs = ['blueprint', 'foo'];
     var files       = ['blueprints/foo/index.js'];
 
@@ -435,6 +505,7 @@ describe('Acceptance: ember destroy', function() {
   });
 
   it('blueprint foo/bar', function() {
+    this.timeout(20000);
     var commandArgs = ['blueprint', 'foo/bar'];
     var files       = ['blueprints/foo/bar/index.js'];
 
@@ -442,6 +513,7 @@ describe('Acceptance: ember destroy', function() {
   });
 
   it('http-mock foo', function() {
+    this.timeout(20000);
     var commandArgs = ['http-mock', 'foo'];
     var files       = ['server/mocks/foo.js'];
 
@@ -449,14 +521,52 @@ describe('Acceptance: ember destroy', function() {
   });
 
   it('http-proxy foo', function() {
-    var commandArgs = ['http-proxy', 'foo'];
+    this.timeout(20000);
+    var commandArgs = ['http-proxy', 'foo', 'bar'];
     var files       = ['server/proxies/foo.js'];
 
     return assertDestroyAfterGenerate(commandArgs, files);
   });
 
+  it('in-addon component x-foo', function() {
+    this.timeout(20000);
+    var commandArgs = ['component', 'x-foo'];
+    var files       = [
+      'addon/components/x-foo.js',
+      'addon/templates/components/x-foo.hbs',
+      'app/components/x-foo.js',
+      'tests/unit/components/x-foo-test.js'
+    ];
+
+    return assertDestroyAfterGenerateInAddon(commandArgs, files);
+  });
+
+  it('in-repo-addon component x-foo', function() {
+    var commandArgs = ['component', 'x-foo', '--in-repo-addon=my-addon'];
+    var files       = [
+      'lib/my-addon/addon/components/x-foo.js',
+      'lib/my-addon/addon/templates/components/x-foo.hbs',
+      'lib/my-addon/app/components/x-foo.js',
+      'tests/unit/components/x-foo-test.js'
+    ];
+
+    return assertDestroyAfterGenerateInRepoAddon(commandArgs, files);
+  });
+
+  it('in-repo-addon component nested/x-foo', function() {
+    var commandArgs = ['component', 'nested/x-foo', '--in-repo-addon=my-addon'];
+    var files       = [
+      'lib/my-addon/addon/components/nested/x-foo.js',
+      'lib/my-addon/addon/templates/components/nested/x-foo.hbs',
+      'lib/my-addon/app/components/nested/x-foo.js',
+      'tests/unit/components/nested/x-foo-test.js'
+    ];
+
+    return assertDestroyAfterGenerateInRepoAddon(commandArgs, files);
+  });
 
   it('acceptance-test foo', function() {
+    this.timeout(20000);
     var commandArgs = ['acceptance-test', 'foo'];
     var files       = ['tests/acceptance/foo-test.js'];
 
@@ -464,6 +574,7 @@ describe('Acceptance: ember destroy', function() {
   });
 
   it('deletes files generated using blueprints from the project directory', function() {
+    this.timeout(20000);
     var commandArgs = ['foo', 'bar'];
     var files       = ['app/foos/bar.js'];
     return initApp()
@@ -489,6 +600,7 @@ describe('Acceptance: ember destroy', function() {
   });
 
   it('correctly identifies the root of the project', function() {
+    this.timeout(20000);
     var commandArgs = ['controller', 'foo'];
     var files       = ['app/controllers/foo.js'];
     return initApp()
@@ -520,6 +632,7 @@ describe('Acceptance: ember destroy', function() {
   });
 
   it('http-mock <name> does not remove server/', function() {
+    this.timeout(20000);
     return initApp()
       .then(function() { return generate(['http-mock', 'foo']); })
       .then(function() { return generate(['http-mock', 'bar']); })

@@ -1,12 +1,13 @@
 /*jshint strict:false */
-/* globals QUnit, visit, andThen */
+/* globals visit, andThen */
 
 import Ember from 'ember';
 import startApp from '../helpers/start-app';
+import { module, test } from 'qunit';
 
 var application;
 
-QUnit.module('pods based templates', {
+module('pods based templates', {
   beforeEach: function() {
     application = startApp();
   },
@@ -16,7 +17,7 @@ QUnit.module('pods based templates', {
 });
 
 
-QUnit.test('the application boots properly with pods based templates with a podModulePrefix set', function(assert) {
+test('the application boots properly with pods based templates with a podModulePrefix set', function(assert) {
   assert.expect(1);
 
   visit('/');

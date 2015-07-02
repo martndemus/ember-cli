@@ -1,9 +1,10 @@
 import Ember from 'ember';
-import startApp from '../helpers/start-app';
+import { module, test } from 'qunit';
+import startApp from '<%= testFolderRoot %>/tests/helpers/start-app';
 
 var application;
 
-QUnit.module('Acceptance: <%= classifiedModuleName %>', {
+module('<%= friendlyTestName %>', {
   beforeEach: function() {
     application = startApp();
   },
@@ -13,10 +14,10 @@ QUnit.module('Acceptance: <%= classifiedModuleName %>', {
   }
 });
 
-QUnit.test('visiting /<%= dasherizedModuleName %>', function(assert) {
+test('visiting /<%= dasherizedModuleName %>', function(assert) {
   visit('/<%= dasherizedModuleName %>');
 
   andThen(function() {
-    assert.equal(currentPath(), '<%= dasherizedModuleName %>');
+    assert.equal(currentURL(), '/<%= dasherizedModuleName %>');
   });
 });

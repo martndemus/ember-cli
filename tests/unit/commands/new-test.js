@@ -48,6 +48,15 @@ describe('new command', function() {
     });
   });
 
+  it('doesn\'t allow to create an application named `ember-cli`', function() {
+    return command.validateAndRun(['ember-cli']).then(function() {
+      expect(false, 'should have rejected with an application name of ember-cli');
+    })
+    .catch(function(error) {
+      expect(error.message).to.equal('We currently do not support a name of `ember-cli`.');
+    });
+  });
+
   it('doesn\'t allow to create an application named `vendor`', function() {
     return command.validateAndRun(['vendor']).then(function() {
       expect(false, 'should have rejected with an application name of `vendor`');
@@ -80,7 +89,7 @@ describe('new command', function() {
       expect(false, 'should have rejected with a name `.`');
     })
     .catch(function(error) {
-      expect(error.message).to.equal('Trying to generate an application structure on this folder? Use `ember init` instead.');
+      expect(error.message).to.equal('Trying to generate an application structure in this directory? Use `ember init` instead.');
     });
   });
 

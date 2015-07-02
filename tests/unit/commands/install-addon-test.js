@@ -1,16 +1,16 @@
 'use strict';
 
-var expect         = require('chai').expect;
-var stub           = require('../../helpers/stub').stub;
+var expect = require('chai').expect;
+var InstallAddonCommand = require('../../../lib/commands/install-addon');
 var commandOptions = require('../../factories/command-options');
-var InstallCommand = require('../../../lib/commands/install-addon');
-var Task           = require('../../../lib/models/task');
-var Project        = require('../../../lib/models/project');
-var Promise        = require('../../../lib/ext/promise');
-var AddonInstall   = require('../../../lib/tasks/addon-install');
+var AddonInstall = require('../../../lib/tasks/addon-install');
+var Task = require('../../../lib/models/task');
+var Promise = require('../../../lib/ext/promise');
+var stub = require('../../helpers/stub').stub;
+var Project = require('../../../lib/models/project');
 
 describe('install:addon command', function() {
-  var command, options, tasks, generateBlueprintInstance, npmInstance;
+  var command, options, tasks, npmInstance, generateBlueprintInstance;
 
   beforeEach(function() {
     tasks = {
@@ -30,38 +30,23 @@ describe('install:addon command', function() {
 
     options = commandOptions({
       settings: {},
-
       project: {
         name: function() {
           return 'some-random-name';
         },
-
         isEmberCLIProject: function() {
           return true;
         },
-
-        initializeAddons: function() { },
+        initializeAddons: function() {  },
         reloadAddons: function() {
-          this.addons = [
-            {
-              pkg: {
-                name: 'ember-data',
-              }
-            },
-            {
-              pkg: {
-                name: 'ember-cli-cordova',
-                'ember-addon': {
-                  defaultBlueprint: 'cordova-starter-kit'
-                }
-              }
-            },
-            {
-              pkg: {
-                name: 'ember-cli-qunit'
+          this.addons = [{
+            pkg: {
+              name: 'ember-cli-photoswipe',
+              'ember-addon': {
+                defaultBlueprint: 'photoswipe'
               }
             }
-          ];
+          }];
         },
 
         findAddonByName: Project.prototype.findAddonByName
@@ -73,7 +58,8 @@ describe('install:addon command', function() {
     stub(tasks.NpmInstall.prototype, 'run', Promise.resolve());
     stub(tasks.GenerateFromBlueprint.prototype, 'run', Promise.resolve());
 
-    command = new InstallCommand(options);
+    command = new InstallAddonCommand(options);
+
   });
 
   afterEach(function() {
@@ -81,8 +67,14 @@ describe('install:addon command', function() {
     tasks.GenerateFromBlueprint.prototype.run.restore();
   });
 
-  it('initializes npm install and generate blueprint task with ui, project and analytics', function() {
-    return command.validateAndRun(['ember-data']).then(function() {
+
+  it('will show a deprecation warning', function() {
+    return command.validateAndRun(['ember-cli-photoswipe']).then(function() {
+      var msg  = 'This command has been deprecated. Please use `ember install ';
+      msg     += '<addonName>` instead.';
+
+      expect(command.ui.output).to.include(msg);
+
       expect(npmInstance.ui, 'ui was set');
       expect(npmInstance.project, 'project was set');
       expect(npmInstance.analytics, 'analytics was set');
@@ -90,62 +82,7 @@ describe('install:addon command', function() {
       expect(generateBlueprintInstance.ui, 'ui was set');
       expect(generateBlueprintInstance.project, 'project was set');
       expect(generateBlueprintInstance.analytics, 'analytics was set');
-    });
-  });
 
-  describe('with args', function() {
-    it('runs the npm install task with given name and save-dev true', function() {
-      return command.validateAndRun(['ember-data']).then(function() {
-        var npmRun = tasks.NpmInstall.prototype.run;
-        expect(npmRun.called).to.equal(1, 'expected npm install run was called once');
-
-        expect(npmRun.calledWith[0][0]).to.deep.equal({
-          packages: ['ember-data'],
-          'save-dev': true,
-          'save-exact': true
-        }, 'expected npm install called with given name and save-dev true');
-      });
-    });
-
-    it('runs the packae name blueprint task with given name and args', function() {
-      return command.validateAndRun(['ember-data']).then(function() {
-        var generateRun = tasks.GenerateFromBlueprint.prototype.run;
-        expect(generateRun.calledWith[0][0].ignoreMissingMain, true);
-        expect(generateRun.calledWith[0][0].args).to.deep.equal([
-          'ember-data'
-        ], 'expected generate blueprint called with correct args');
-      });
-    });
-
-    it('runs the defaultBlueprint task with given github/name and args', function() {
-      return command.validateAndRun(['ember-cli-cordova', 'com.ember.test']).then(function() {
-        var generateRun = tasks.GenerateFromBlueprint.prototype.run;
-        expect(generateRun.calledWith[0][0].ignoreMissingMain, true);
-        expect(generateRun.calledWith[0][0].args).to.deep.equal([
-          'cordova-starter-kit', 'com.ember.test'
-        ], 'expected generate blueprint called with correct args');
-      });
-    });
-
-    it('runs the package name blueprint task when given github/name and args', function() {
-      return command.validateAndRun(['ember-cli/ember-cli-qunit']).then(function() {
-        var generateRun = tasks.GenerateFromBlueprint.prototype.run;
-        expect(generateRun.calledWith[0][0].ignoreMissingMain, true);
-        expect(generateRun.calledWith[0][0].args).to.deep.equal([
-          'ember-cli-qunit'
-        ], 'expected generate blueprint called with correct args');
-      });
-    });
-
-    it('gives helpful message if it can\'t find the addon', function() {
-      return command.validateAndRun(['unknown-addon']).then(function() {
-        expect(false, 'should reject with error');
-      }).catch(function(err) {
-        expect(err.message).to.equal(
-          'Install failed. Could not find addon with name: unknown-addon',
-          'expected error to have helpful message'
-        );
-      });
     });
   });
 });

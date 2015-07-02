@@ -63,6 +63,21 @@ describe('Acceptance: smoke-test', function() {
       });
   });
 
+  it('ember test exits with non-zero when build fails', function() {
+    this.timeout(450000);
+
+    return copyFixtureFiles('smoke-tests/test-with-syntax-error')
+      .then(function() {
+        return runCommand(path.join('.', 'node_modules', 'ember-cli', 'bin', 'ember'), 'test', '--silent')
+          .then(function() {
+            expect(false, 'should have rejected with a failing test');
+          })
+          .catch(function(result) {
+            expect(result.code).to.equal(1);
+          });
+      });
+  });
+
   it('ember test exits with non-zero when no tests are run', function() {
     this.timeout(450000);
 
@@ -280,5 +295,20 @@ describe('Acceptance: smoke-test', function() {
           });
         });
     });
+  });
+
+  it('ember can override and reuse the built-in blueprints', function() {
+    this.timeout(450000);
+    return copyFixtureFiles('addon/with-blueprint-override')
+      .then(function() {
+        return runCommand(path.join('.', 'node_modules', 'ember-cli', 'bin', 'ember'), 'generate', 'component', 'foo-bar', '-p');
+      })
+      .then(function() {
+        // because we're overriding, the fileMapTokens is default, sans 'component'
+        var componentPath = path.join('app','foo-bar','component.js');
+        var contents = fs.readFileSync(componentPath, { encoding: 'utf8' });
+
+        expect(contents).to.contain('generated component successfully');
+      });
   });
 });

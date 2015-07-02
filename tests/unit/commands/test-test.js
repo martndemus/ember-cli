@@ -3,13 +3,13 @@
 var expect         = require('chai').expect;
 var commandOptions = require('../../factories/command-options');
 var stub           = require('../../helpers/stub').stub;
+var existsSync     = require('exists-sync');
 var Promise        = require('../../../lib/ext/promise');
 var Task           = require('../../../lib/models/task');
 var CoreObject     = require('core-object');
 var path           = require('path');
 var fs             = require('fs');
-
-var TestCommand = require('../../../lib/commands/test');
+var TestCommand    = require('../../../lib/commands/test');
 
 describe('test command', function() {
   var tasks;
@@ -68,11 +68,27 @@ describe('test command', function() {
     });
   });
 
+  it('passes through custom host option', function() {
+    return new TestCommand(options).validateAndRun(['--host=greatwebsite.com']).then(function() {
+      var testOptions  = testRun.calledWith[0][0];
+
+      expect(testOptions.host).to.equal('greatwebsite.com');
+    });
+  });
+
   it('passes through custom port option', function() {
     return new TestCommand(options).validateAndRun(['--port=5678']).then(function() {
       var testOptions  = testRun.calledWith[0][0];
 
       expect(testOptions.port).to.equal(5678);
+    });
+  });
+
+  it('passes through custom reporter option', function() {
+    return new TestCommand(options).validateAndRun(['--reporter=xunit']).then(function() {
+      var testOptions  = testRun.calledWith[0][0];
+
+      expect(testOptions.reporter).to.equal('xunit');
     });
   });
 
@@ -119,24 +135,25 @@ describe('test command', function() {
     it('should return a valid path', function() {
       var newPath = command._generateCustomConfigFile(runOptions);
 
-      expect(fs.existsSync(newPath));
+      expect(existsSync(newPath));
     });
 
-    it('should return the original path if filter or module isn\'t present', function() {
+    it('should return the original path if filter or module or launch isn\'t present', function() {
       var originalPath = runOptions.configFile;
       var newPath = command._generateCustomConfigFile(runOptions);
 
       expect(newPath).to.equal(originalPath);
     });
 
-    it('when module and filter option is present the new file path returned exists', function() {
+    it('when module and filter and launch option is present the new file path returned exists', function() {
       var originalPath = runOptions.configFile;
       runOptions.module = 'fooModule';
       runOptions.filter = 'bar';
+      runOptions.launch = 'fooLauncher';
       var newPath = command._generateCustomConfigFile(runOptions);
 
       expect(newPath).to.not.equal(originalPath);
-      expect(fs.existsSync(newPath), 'file should exist');
+      expect(existsSync(newPath), 'file should exist');
     });
 
     it('when filter option is present the new file path returned exists', function() {
@@ -145,7 +162,7 @@ describe('test command', function() {
       var newPath = command._generateCustomConfigFile(runOptions);
 
       expect(newPath).to.not.equal(originalPath);
-      expect(fs.existsSync(newPath), 'file should exist');
+      expect(existsSync(newPath), 'file should exist');
     });
 
     it('when module option is present the new file path returned exists', function() {
@@ -154,7 +171,16 @@ describe('test command', function() {
       var newPath = command._generateCustomConfigFile(runOptions);
 
       expect(newPath).to.not.equal(originalPath);
-      expect(fs.existsSync(newPath), 'file should exist');
+      expect(existsSync(newPath), 'file should exist');
+    });
+
+    it('when launch option is present the new file path returned exists', function() {
+      var originalPath = runOptions.configFile;
+      runOptions.launch = 'fooLauncher';
+      var newPath = command._generateCustomConfigFile(runOptions);
+
+      expect(newPath).to.not.equal(originalPath);
+      expect(existsSync(newPath), 'file should exist');
     });
 
     it('when provided filter and module the new file returned contains the both option values in test_page', function() {
@@ -164,6 +190,22 @@ describe('test command', function() {
       var contents = JSON.parse(fs.readFileSync(newPath, { encoding: 'utf8' }));
 
       expect(contents['test_page']).to.be.equal('tests/index.html?module=fooModule&filter=bar');
+    });
+
+    it('when provided launch the new file returned contains the value in launch', function() {
+      runOptions.launch = 'fooLauncher';
+      var newPath = command._generateCustomConfigFile(runOptions);
+      var contents = JSON.parse(fs.readFileSync(newPath, { encoding: 'utf8' }));
+
+      expect(contents['launch']).to.be.equal('fooLauncher');
+    });
+
+    it('when provided filter is all lowercase to match the test name', function() {
+      runOptions.filter = 'BAR';
+      var newPath = command._generateCustomConfigFile(runOptions);
+      var contents = JSON.parse(fs.readFileSync(newPath, { encoding: 'utf8' }));
+
+      expect(contents['test_page']).to.be.equal('tests/index.html?filter=bar');
     });
 
     it('when module and filter option is present uses buildTestPageQueryString for test_page queryString', function() {

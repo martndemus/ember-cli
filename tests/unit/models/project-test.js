@@ -7,14 +7,20 @@ var stub    = require('../../helpers/stub').stub;
 var tmp     = require('../../helpers/tmp');
 var touch   = require('../../helpers/file-utils').touch;
 var expect  = require('chai').expect;
+var MockUI = require('../../helpers/mock-ui');
 
-var emberCLIVersion = require('../../../lib/utilities/ember-cli-version');
+var versionUtils = require('../../../lib/utilities/version-utils');
+var emberCLIVersion = versionUtils.emberCLIVersion;
 
 describe('models/project.js', function() {
   var project, projectPath;
 
+  afterEach(function() {
+    if (project) { project = null; }
+  });
+
   describe('Project.prototype.config', function() {
-    var called      = false;
+    var called;
 
     beforeEach(function() {
       projectPath = process.cwd() + '/tmp/test-app';
@@ -25,7 +31,7 @@ describe('models/project.js', function() {
             baseURL: '/foo/bar'
           });
 
-          project = new Project(projectPath, { });
+          project = new Project(projectPath, { }, new MockUI());
           project.require = function() {
             called = true;
             return function() {};
@@ -34,6 +40,7 @@ describe('models/project.js', function() {
     });
 
     afterEach(function() {
+      called = null;
       return tmp.teardown(projectPath);
     });
 
@@ -142,7 +149,7 @@ describe('models/project.js', function() {
       projectPath = path.resolve(__dirname, '../../fixtures/addon/simple');
       var packageContents = require(path.join(projectPath, 'package.json'));
 
-      project = new Project(projectPath, packageContents);
+      project = new Project(projectPath, packageContents, new MockUI());
       project.initializeAddons();
     });
 
@@ -152,7 +159,6 @@ describe('models/project.js', function() {
         'ember-random-addon': 'latest',
         'ember-non-root-addon': 'latest',
         'ember-generated-with-export-addon': 'latest',
-        'ember-generated-no-export-addon': 'latest',
         'non-ember-thingy': 'latest',
         'ember-before-blueprint-addon': 'latest',
         'ember-after-blueprint-addon': 'latest',
@@ -166,7 +172,6 @@ describe('models/project.js', function() {
 
     it('returns a listing of all dependencies in the projects bower.json', function() {
       var expected = {
-        'handlebars': '~1.3.0',
         'jquery': '^1.11.1',
         'ember': '1.7.0',
         'ember-data': '1.0.0-beta.10',
@@ -183,25 +188,25 @@ describe('models/project.js', function() {
       expect(project.bowerDependencies()).to.deep.equal(expected);
     });
 
-    it('returns a listing of all ember-cli-addons', function() {
+    it('returns a listing of all ember-cli-addons directly depended on by the project', function() {
       var expected = [
         'tests-server-middleware',
         'history-support-middleware', 'serve-files-middleware',
         'proxy-server-middleware', 'ember-random-addon', 'ember-non-root-addon',
-        'ember-generated-with-export-addon', 'ember-generated-no-export-addon',
+        'ember-generated-with-export-addon',
         'ember-before-blueprint-addon', 'ember-after-blueprint-addon',
-        'ember-devDeps-addon', 'ember-addon-with-dependencies', 'ember-yagni', 
-        'ember-ng', 'ember-super-button'
+        'ember-devDeps-addon', 'ember-addon-with-dependencies', 'ember-super-button'
       ];
-
-      project.buildAddonPackages();
       expect(Object.keys(project.addonPackages)).to.deep.equal(expected);
     });
 
-    it('returns an instance of the addon', function() {
+    it('returns instances of the addons', function() {
       var addons = project.addons;
 
-      expect(addons[6].name).to.equal('Ember Non Root Addon');
+      expect(addons[5].name).to.equal('Ember Non Root Addon');
+      expect(addons[11].name).to.equal('Ember Super Button');
+      expect(addons[11].addons[0].name).to.equal('Ember Yagni');
+      expect(addons[11].addons[1].name).to.equal('Ember Ng');
     });
 
     it('addons get passed the project instance', function() {
@@ -213,7 +218,7 @@ describe('models/project.js', function() {
     it('returns an instance of an addon that uses `ember-addon-main`', function() {
       var addons = project.addons;
 
-      expect(addons[8].name).to.equal('Ember Random Addon');
+      expect(addons[7].name).to.equal('Ember Random Addon');
     });
 
     it('returns the default blueprints path', function() {
@@ -222,7 +227,7 @@ describe('models/project.js', function() {
       expect(project.localBlueprintLookupPath()).to.equal(expected);
     });
 
-    it('returns a listing of all addon blueprints paths ordered by last loaded', function() {
+    it('returns a listing of all addon blueprints paths ordered by last loaded when called once', function() {
       var loadedBlueprintPaths = [
         project.root + path.normalize('/node_modules/ember-before-blueprint-addon/blueprints'),
         project.root + path.normalize('/node_modules/ember-random-addon/blueprints'),
@@ -231,8 +236,24 @@ describe('models/project.js', function() {
 
       // the first found addon blueprint should be the last one defined
       var expected = loadedBlueprintPaths.reverse();
+      var first = project.addonBlueprintLookupPaths();
 
-      expect(project.addonBlueprintLookupPaths()).to.deep.equal(expected);
+      expect(first).to.deep.equal(expected);
+    });
+
+    it('returns a listing of all addon blueprints paths ordered by last loaded when called twice', function() {
+      var loadedBlueprintPaths = [
+        project.root + path.normalize('/node_modules/ember-before-blueprint-addon/blueprints'),
+        project.root + path.normalize('/node_modules/ember-random-addon/blueprints'),
+        project.root + path.normalize('/node_modules/ember-after-blueprint-addon/blueprints')
+      ];
+
+      // the first found addon blueprint should be the last one defined
+      var expected = loadedBlueprintPaths.reverse();
+      /*var first = */project.addonBlueprintLookupPaths();
+      var second = project.addonBlueprintLookupPaths();
+
+      expect(second).to.deep.equal(expected);
     });
 
     it('returns a listing of all blueprints paths', function() {
@@ -246,12 +267,12 @@ describe('models/project.js', function() {
       expect(project.blueprintLookupPaths()).to.deep.equal(expected);
     });
 
-    it('returns an empty list of blueprint paths if outside a project', function() {
+    it('does not include blueprint path relative to root if outside a project', function() {
       project.isEmberCLIProject = function() {
         return false;
       };
 
-      expect(project.blueprintLookupPaths()).to.deep.equal([]);
+      expect(project.blueprintLookupPaths()).to.deep.equal(project.addonBlueprintLookupPaths());
     });
 
     it('returns an instance of an addon with an object export', function() {
@@ -261,30 +282,21 @@ describe('models/project.js', function() {
       expect(addons[4].name).to.equal('Ember CLI Generated with export');
     });
 
-    it('returns an instance of a generated addon with no export', function() {
-      var addons = project.addons;
-
-      expect(addons[5] instanceof Addon).to.equal(true);
-      expect(addons[5].name).to.equal('(generated ember-generated-no-export-addon addon)');
-    });
-
     it('adds the project itself if it is an addon', function() {
       var added = false;
       project.addonPackages = {};
       project.isEmberCLIAddon = function() { return true; };
 
-      project.addIfAddon = function(path) {
+      project.addonDiscovery.discoverAtPath = function(path) {
         if (path === project.root) {
           added = true;
         }
       };
 
-      project.buildAddonPackages();
+      project.discoverAddons();
 
       expect(added);
     });
-
-
   });
 
   describe('reloadAddon', function() {
@@ -292,7 +304,7 @@ describe('models/project.js', function() {
       projectPath         = path.resolve(__dirname, '../../fixtures/addon/simple');
       var packageContents = require(path.join(projectPath, 'package.json'));
 
-      project = new Project(projectPath, packageContents);
+      project = new Project(projectPath, packageContents, new MockUI());
       project.initializeAddons();
 
       stub(Project.prototype, 'initializeAddons');
@@ -325,7 +337,7 @@ describe('models/project.js', function() {
       projectPath         = path.resolve(__dirname, '../../fixtures/addon/simple');
       var packageContents = require(path.join(projectPath, 'package.json'));
 
-      project = new Project(projectPath, packageContents);
+      project = new Project(projectPath, packageContents, new MockUI());
       project.initializeAddons();
 
       newProjectPath = path.resolve(__dirname, '../../fixtures/addon/env-addons');
@@ -342,8 +354,36 @@ describe('models/project.js', function() {
   });
 
   describe('emberCLIVersion', function() {
+    beforeEach(function() {
+      projectPath = process.cwd() + '/tmp/test-app';
+      project = new Project(projectPath, {}, new MockUI());
+    });
+
     it('should return the same value as the utlity function', function() {
       expect(project.emberCLIVersion()).to.equal(emberCLIVersion());
+    });
+  });
+
+  describe('isEmberCLIProject', function() {
+    beforeEach(function() {
+      projectPath = process.cwd() + '/tmp/test-app';
+      project = new Project(projectPath, {}, new MockUI());
+    });
+
+    it('returns false when `ember-cli` is not a dependency', function(){
+      expect(project.isEmberCLIProject()).to.equal(false);
+    });
+
+    it('returns true when `ember-cli` is a devDependency', function(){
+      project.pkg.devDependencies = {'ember-cli': '*'};
+
+      expect(project.isEmberCLIProject()).to.equal(true);
+    });
+
+    it('returns true when `ember-cli` is a dependency', function(){
+      project.pkg.dependencies = {'ember-cli': '*'};
+
+      expect(project.isEmberCLIProject()).to.equal(true);
     });
   });
 
@@ -351,7 +391,7 @@ describe('models/project.js', function() {
     beforeEach(function() {
       projectPath = process.cwd() + '/tmp/test-app';
 
-      project = new Project(projectPath, {});
+      project = new Project(projectPath, {}, new MockUI());
       project.initializeAddons();
     });
 
@@ -376,7 +416,7 @@ describe('models/project.js', function() {
     beforeEach(function() {
       projectPath = process.cwd() + '/tmp/test-app';
 
-      project = new Project(projectPath, {});
+      project = new Project(projectPath, {}, new MockUI());
 
       stub(Project.prototype, 'initializeAddons');
 
@@ -422,32 +462,69 @@ describe('models/project.js', function() {
   });
 
   describe('bowerDirectory', function() {
+    beforeEach(function() {
+      projectPath = path.resolve(__dirname, '../../fixtures/addon/simple');
+      project = new Project(projectPath, {}, new MockUI());
+    });
+
     it('should be initialized in constructor', function() {
       expect(project.bowerDirectory).to.equal('bower_components');
     });
 
     it('should be set to directory property in .bowerrc', function() {
       projectPath = path.resolve(__dirname, '../../fixtures/bower-directory-tests/bowerrc-with-directory');
-      project = new Project(projectPath, {});
+      project = new Project(projectPath, {}, new MockUI());
       expect(project.bowerDirectory).to.equal('vendor');
     });
 
     it('should default to ‘bower_components’ unless directory property is set in .bowerrc', function() {
       projectPath = path.resolve(__dirname, '../../fixtures/bower-directory-tests/bowerrc-without-directory');
-      project = new Project(projectPath, {});
+      project = new Project(projectPath, {}, new MockUI());
       expect(project.bowerDirectory).to.equal('bower_components');
     });
 
     it('should default to ‘bower_components’ if .bowerrc is not present', function() {
       projectPath = path.resolve(__dirname, '../../fixtures/bower-directory-tests/no-bowerrc');
-      project = new Project(projectPath, {});
+      project = new Project(projectPath, {}, new MockUI());
       expect(project.bowerDirectory).to.equal('bower_components');
     });
 
     it('should default to ‘bower_components’ if .bowerrc json is invalid', function() {
       projectPath = path.resolve(__dirname, '../../fixtures/bower-directory-tests/invalid-bowerrc');
-      project = new Project(projectPath, {});
+      project = new Project(projectPath, {}, new MockUI());
       expect(project.bowerDirectory).to.equal('bower_components');
+    });
+  });
+
+  describe('nodeModulesPath', function() {
+    function makeProject() {
+      projectPath = path.resolve(__dirname, '../../fixtures/addon/simple');
+      project = new Project(projectPath, {}, new MockUI());
+    }
+
+    afterEach(function() {
+      delete process.env.EMBER_NODE_PATH;
+    });
+
+    it('should equal env.EMBER_NODE_PATH when it is set', function() {
+      var nodePath = '/my/path/node_modules';
+      process.env.EMBER_NODE_PATH = nodePath;
+
+      makeProject();
+
+      expect(project.nodeModulesPath).to.equal(path.resolve(nodePath));
+    });
+
+    it('should equal project.root joined with "node_modules" when EMBER_NODE_PATH is not set', function() {
+      makeProject();
+
+      expect(project.nodeModulesPath).to.equal(path.join(projectPath, 'node_modules'));
+    });
+  });
+
+  describe('.nullProject', function (){
+    it('is a singleton', function() {
+      expect(Project.nullProject()).to.equal(Project.nullProject());
     });
   });
 });

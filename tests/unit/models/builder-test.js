@@ -6,6 +6,7 @@ var Builder         = require('../../../lib/models/builder');
 var BuildCommand    = require('../../../lib/commands/build');
 var commandOptions  = require('../../factories/command-options');
 var touch           = require('../../helpers/file-utils').touch;
+var existsSync      = require('exists-sync');
 var expect          = require('chai').expect;
 var Promise         = require('../../../lib/ext/promise');
 var stub            = require('../../helpers/stub').stub;
@@ -40,7 +41,7 @@ describe('models/builder.js', function() {
 
       return builder.copyToOutputPath('tests/fixtures/blueprints/basic_2')
         .then(function() {
-          expect(fs.existsSync(path.join(builder.outputPath, 'files', 'foo.txt'))).to.equal(true);
+          expect(existsSync(path.join(builder.outputPath, 'files', 'foo.txt'))).to.equal(true);
         });
     });
   });
@@ -65,13 +66,14 @@ describe('models/builder.js', function() {
 
     return builder.clearOutputPath()
       .then(function() {
-        expect(fs.existsSync(firstFile)).to.equal(false);
-        expect(fs.existsSync(secondFile)).to.equal(false);
+        expect(existsSync(firstFile)).to.equal(false);
+        expect(existsSync(secondFile)).to.equal(false);
       });
   });
 
   describe('Prevent deletion of files for improper outputPath', function() {
     var command;
+    var parentPath = '..' + path.sep + '..' + path.sep;
 
     before(function() {
       command = new BuildCommand(commandOptions({
@@ -86,15 +88,13 @@ describe('models/builder.js', function() {
       });
     });
 
-    it('when outputPath is root directory ie., `--output-path=/`', function() {
-      var outputPathArg = '--output-path=/';
+    it('when outputPath is root directory ie., `--output-path=/` or `--output-path=C:`', function() {
+      var outputPathArg = '--output-path=.';
       var outputPath = command.parseArgs([outputPathArg]).options.outputPath;
+      outputPath = outputPath.split(path.sep)[0] + path.sep;
       builder.outputPath = outputPath;
 
-      return builder.clearOutputPath()
-        .catch(function(error) {
-          expect(error.message).to.equal('Using a build destination path of `' + outputPath + '` is not supported.');
-        });
+      expect(builder.canDeleteOutputPath(outputPath)).to.equal(false);
     });
 
     it('when outputPath is project root ie., `--output-path=.`', function() {
@@ -102,21 +102,24 @@ describe('models/builder.js', function() {
       var outputPath = command.parseArgs([outputPathArg]).options.outputPath;
       builder.outputPath = outputPath;
 
-      return builder.clearOutputPath()
-        .catch(function(error) {
-          expect(error.message).to.equal('Using a build destination path of `' + outputPath + '` is not supported.');
-        });
+      expect(builder.canDeleteOutputPath(outputPath)).to.equal(false);
     });
 
-    it('when outputPath is a parent directory ie., `--output-path=../../`', function() {
-      var outputPathArg = '--output-path=../../';
+    it('when outputPath is a parent directory ie., `--output-path=' + parentPath + '`', function() {
+      var outputPathArg = '--output-path=' + parentPath;
       var outputPath = command.parseArgs([outputPathArg]).options.outputPath;
       builder.outputPath = outputPath;
 
-      return builder.clearOutputPath()
-        .catch(function(error) {
-          expect(error.message).to.equal('Using a build destination path of `' + outputPath + '` is not supported.');
-        });
+      expect(builder.canDeleteOutputPath(outputPath)).to.equal(false);
+    });
+
+    it('allow outputPath to contain the root path as a substring, as long as it is not a parent', function() {
+      var outputPathArg = '--output-path=.';
+      var outputPath = command.parseArgs([outputPathArg]).options.outputPath;
+      outputPath = outputPath.substr(0, outputPath.length - 1);
+      builder.outputPath = outputPath;
+
+      expect(builder.canDeleteOutputPath(outputPath)).to.equal(true);
     });
   });
 
@@ -184,6 +187,22 @@ describe('models/builder.js', function() {
     it('hooks are called in the right order', function() {
       return builder.build().then(function() {
         expect(hooksCalled).to.deep.equal(['preBuild', 'build', 'postBuild']);
+      });
+    });
+
+    it('should call postBuild before processBuildResult', function() {
+      var called = [];
+
+      addon.postBuild = function() {
+        called.push('postBuild');
+      };
+
+      builder.processBuildResult = function() {
+        called.push('processBuildResult');
+      };
+
+      return builder.build().then(function() {
+        expect(called).to.deep.equal(['postBuild', 'processBuildResult']);
       });
     });
 

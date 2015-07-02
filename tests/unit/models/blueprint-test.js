@@ -15,7 +15,7 @@ var EOL               = require('os').EOL;
 var root              = process.cwd();
 var tmp               = require('tmp-sync');
 var tmproot           = path.join(root, 'tmp');
-var SilentError       = require('../../../lib/errors/silent');
+var SilentError       = require('silent-error');
 
 var defaultBlueprints = path.resolve(__dirname, '..', '..', '..', 'blueprints');
 var fixtureBlueprints = path.resolve(__dirname, '..', '..', 'fixtures', 'blueprints');
@@ -85,6 +85,7 @@ describe('Blueprint', function() {
       var fileMapVariables = {
         pod: true,
         podPath: 'pods',
+        isAddon: false,
         blueprintName: 'test',
         dasherizedModuleName: 'foo-baz',
         locals: { SOME_LOCAL_ARG: 'ARGH' }
@@ -94,6 +95,7 @@ describe('Blueprint', function() {
       var expected = {
         __name__: 'foo-baz',
         __path__: 'tests',
+        __root__: 'app',
         __test__: 'foo-baz-test'
       };
 
@@ -196,6 +198,7 @@ describe('Blueprint', function() {
   });
 
   describe('basic blueprint installation', function() {
+    var BasicBlueprintClass = require(basicBlueprint);
     var blueprint;
     var ui;
     var project;
@@ -204,7 +207,7 @@ describe('Blueprint', function() {
 
     beforeEach(function() {
       tmpdir    = tmp.in(tmproot);
-      blueprint = new Blueprint(basicBlueprint);
+      blueprint = new BasicBlueprintClass(basicBlueprint);
       ui        = new MockUI();
       project   = new MockProject();
       options   = {
@@ -235,6 +238,18 @@ describe('Blueprint', function() {
           expect(output.length).to.equal(0);
 
           expect(actualFiles).to.deep.equal(basicBlueprintFiles);
+
+          expect( function(){
+            fs.readFile(path.join(tmpdir , 'test.txt'), 'utf-8',
+                function(err, content){
+                    if(err){
+                        throw 'error';
+                    }
+                    expect(content).to.match(/I AM TESTY/);
+                });
+            }
+          ).not.to.throw();
+
         });
     });
 
@@ -431,6 +446,14 @@ describe('Blueprint', function() {
       }).to.throw(SilentError, /The `ember generate` command requires an entity name to be specified./);
     });
 
+    it('throws error when an action does not exist', function() {
+      blueprint._actions = {};
+      return blueprint.install(options)
+        .catch(function(err) {
+          expect(err.message).to.equal('Tried to call action "write" but it does not exist');
+        });
+    });
+
     it('calls normalizeEntityName hook during install', function(done){
       blueprint.normalizeEntityName = function(){ done(); };
       options.entity = { name: 'foo' };
@@ -457,6 +480,63 @@ describe('Blueprint', function() {
       };
       options.entity = { name: 'bar' };
       blueprint.install(options);
+    });
+  });
+
+  describe('basic blueprint uninstallation', function() {
+    var BasicBlueprintClass = require(basicBlueprint);
+    var blueprint;
+    var ui;
+    var project;
+    var options;
+    var tmpdir;
+
+    function refreshUI() {
+      ui = new MockUI();
+      options.ui = ui;
+    }
+
+    beforeEach(function() {
+      tmpdir    = tmp.in(tmproot);
+      blueprint = new BasicBlueprintClass(basicBlueprint);
+      project   = new MockProject();
+      options   = {
+        project: project,
+        target: tmpdir
+      };
+
+      refreshUI();
+      return blueprint.install(options)
+        .then(refreshUI);
+    });
+
+    afterEach(function() {
+      return remove(tmproot);
+    });
+
+    it('uninstalls basic files', function() {
+      expect(!!blueprint).to.equal(true);
+
+      return blueprint.uninstall(options)
+        .then(function() {
+          var actualFiles = walkSync(tmpdir);
+          var output = ui.output.trim().split(EOL);
+
+          expect(output.shift()).to.match(/^uninstalling/);
+          expect(output.shift()).to.match(/remove.* .ember-cli/);
+          expect(output.shift()).to.match(/remove.* .gitignore/);
+          expect(output.shift()).to.match(/remove.* bar/);
+          expect(output.shift()).to.match(/remove.* foo.txt/);
+          expect(output.shift()).to.match(/remove.* test.txt/);
+          expect(output.length).to.equal(0);
+
+          expect(actualFiles.length).to.equal(0);
+
+          fs.exists(path.join(tmpdir, 'test.txt'),
+            function(exists) {
+              expect(exists).to.be.false;
+            });
+        });
     });
   });
 
@@ -560,7 +640,6 @@ describe('Blueprint', function() {
     });
 
     it('writes information to the ui log for a single package', function() {
-      blueprint._exec = function() { };
       blueprint.ui = ui;
 
       blueprint.addPackagesToProject([
@@ -573,7 +652,6 @@ describe('Blueprint', function() {
     });
 
     it('writes information to the ui log for multiple packages', function() {
-      blueprint._exec = function() { };
       blueprint.ui = ui;
 
       blueprint.addPackagesToProject([
@@ -587,7 +665,6 @@ describe('Blueprint', function() {
     });
 
     it('does not error if ui is not present', function() {
-      blueprint._exec = function() { };
       delete blueprint.ui;
 
       blueprint.addPackagesToProject([
@@ -628,6 +705,163 @@ describe('Blueprint', function() {
       blueprint.addPackagesToProject([
         {name: 'foo-bar', target: '^123.1.12'},
         {name: 'bar-foo', target: '0.0.7'}
+      ]);
+
+      expect(verbose).to.equal(false);
+    });
+  });
+
+  describe('removePackageFromProject', function() {
+    var blueprint;
+    var ui;
+    var tmpdir;
+    var NpmUninstallTask;
+    var taskNameLookedUp;
+
+    beforeEach(function() {
+      tmpdir    = tmp.in(tmproot);
+      blueprint = new Blueprint(basicBlueprint);
+      ui        = new MockUI();
+
+      blueprint.taskFor = function(name) {
+        taskNameLookedUp = name;
+
+        return new NpmUninstallTask();
+      };
+    });
+
+    afterEach(function() {
+      return remove(tmproot);
+    });
+
+    it('looks up the `npm-uninstall` task', function() {
+      NpmUninstallTask = Task.extend({
+        run: function() {}
+      });
+
+      blueprint.removePackageFromProject({name: 'foo-bar'});
+
+      expect(taskNameLookedUp).to.equal('npm-uninstall');
+    });
+
+  });
+
+  describe('removePackagesFromProject', function() {
+    var blueprint;
+    var ui;
+    var tmpdir;
+    var NpmUninstallTask;
+    var taskNameLookedUp;
+
+    beforeEach(function() {
+      tmpdir    = tmp.in(tmproot);
+      blueprint = new Blueprint(basicBlueprint);
+      ui        = new MockUI();
+
+      blueprint.taskFor = function(name) {
+        taskNameLookedUp = name;
+
+        return new NpmUninstallTask();
+      };
+    });
+
+    afterEach(function() {
+      return remove(tmproot);
+    });
+
+    it('looks up the `npm-uninstall` task', function() {
+      NpmUninstallTask = Task.extend({
+        run: function() {}
+      });
+
+      blueprint.removePackagesFromProject([{name: 'foo-bar'}]);
+
+      expect(taskNameLookedUp).to.equal('npm-uninstall');
+    });
+
+    it('calls the task with package names', function() {
+      var packages;
+
+      NpmUninstallTask = Task.extend({
+        run: function(options) {
+          packages = options.packages;
+        }
+      });
+
+      blueprint.removePackagesFromProject([
+        {name: 'foo-bar'},
+        {name: 'bar-foo'}
+      ]);
+
+      expect(packages).to.deep.equal(['foo-bar', 'bar-foo']);
+    });
+
+    it('writes information to the ui log for a single package', function() {
+      blueprint.ui = ui;
+
+      blueprint.removePackagesFromProject([
+        {name: 'foo-bar'}
+      ]);
+
+      var output = ui.output.trim();
+
+      expect(output).to.match(/uninstall package.*foo-bar/);
+    });
+
+    it('writes information to the ui log for multiple packages', function() {
+      blueprint.ui = ui;
+
+      blueprint.removePackagesFromProject([
+        {name: 'foo-bar'},
+        {name: 'bar-foo'}
+      ]);
+
+      var output = ui.output.trim();
+
+      expect(output).to.match(/uninstall packages.*foo-bar, bar-foo/);
+    });
+
+    it('does not error if ui is not present', function() {
+      delete blueprint.ui;
+
+      blueprint.removePackagesFromProject([
+        {name: 'foo-bar'}
+      ]);
+
+      var output = ui.output.trim();
+
+      expect(output).to.not.match(/uninstall package.*foo-bar/);
+    });
+
+    it('runs task with --save-dev', function() {
+      var saveDev;
+
+      NpmUninstallTask = Task.extend({
+        run: function(options) {
+          saveDev = options['save-dev'];
+        }
+      });
+
+      blueprint.removePackagesFromProject([
+        {name: 'foo-bar'},
+        {name: 'bar-foo'}
+      ]);
+
+      expect(!!saveDev).to.equal(true);
+    });
+
+    it('does not use verbose mode with the task', function() {
+      var verbose;
+
+      NpmUninstallTask = Task.extend({
+        run: function(options) {
+          verbose = options.verbose;
+        }
+      });
+
+      blueprint.removePackagesFromProject([
+        {name: 'foo-bar'},
+        {name: 'bar-foo'}
       ]);
 
       expect(verbose).to.equal(false);
@@ -826,7 +1060,6 @@ describe('Blueprint', function() {
     });
 
     it('writes information to the ui log for a single package', function() {
-      blueprint._exec = function() { };
       blueprint.ui = ui;
 
       blueprint.addAddonToProject({
@@ -840,7 +1073,6 @@ describe('Blueprint', function() {
     });
 
     it('does not error if ui is not present', function() {
-      blueprint._exec = function() { };
       delete blueprint.ui;
 
       blueprint.addAddonToProject({
@@ -850,6 +1082,18 @@ describe('Blueprint', function() {
       var output = ui.output.trim();
 
       expect(output).to.not.match(/install addon.*foo-bar/);
+    });
+  });
+
+  describe('load', function(){
+    var blueprint;
+    it('loads and returns a blueprint object', function() {
+      blueprint = Blueprint.load(basicBlueprint);
+      expect(blueprint).to.be.an('object');
+      expect(blueprint.name).to.equal('basic');
+    });
+    it('loads only blueprints with an index.js', function() {
+      expect(Blueprint.load(path.join(fixtureBlueprints, '.notablueprint'))).to.be.empty;
     });
   });
 

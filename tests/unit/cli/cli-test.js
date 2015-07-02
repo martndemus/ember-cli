@@ -27,9 +27,21 @@ function ember(args) {
     project: {
       isEmberCLIProject: function() {  // similate being inside or outside of a project
         return isWithinProject;
+      },
+      blueprintLookupPaths: function() {
+        return [];
       }
     }
   });
+}
+
+function stubCallHelp() {
+  return stub(CLI.prototype, 'callHelp');
+}
+
+function stubValidateAndRunHelp(name) {
+  commands[name] = require('../../../lib/commands/' + name);
+  return stub(commands[name].prototype, 'validateAndRun', 'callHelp');
 }
 
 function stubValidateAndRun(name) {
@@ -100,8 +112,8 @@ describe('Unit: CLI', function() {
       });
 
       it('ember new ' + command, function() {
-        var help = stubValidateAndRun('help');
-        var newCommand = stubValidateAndRun('new');
+        var help = stubCallHelp();
+        var newCommand = stubValidateAndRunHelp('new');
 
         return ember(['new', command]).then(function() {
           expect(help.called).to.equal(1, 'expected help to be called once');
@@ -109,7 +121,7 @@ describe('Unit: CLI', function() {
           assertVersion(output[0]);
           expect(output.length).to.equal(1, 'expected no extra output');
 
-          expect(newCommand.called).to.equal(0, 'expected the new command to never be called');
+          expect(newCommand.called).to.equal(1, 'expected the new command to be called once');
         });
       });
     });
@@ -142,7 +154,7 @@ describe('Unit: CLI', function() {
           if (/win\d+/.test(process.platform) || options.watcher === 'watchman') {
             expect(output.length).to.equal(1, 'expected no extra output');
           } else {
-            expect(output.length).to.equal(2, 'expected no extra output');
+            expect(output.length).to.equal(3, 'expected no extra output');
           }
         });
       });
@@ -318,7 +330,7 @@ describe('Unit: CLI', function() {
           if (/win\d+/.test(process.platform) || options.watcher === 'watchman') {
             expect(output.length).to.equal(1, 'expected no extra output');
           } else {
-            expect(output.length).to.equal(2, 'expected no extra output');
+            expect(output.length).to.equal(3, 'expected no extra output');
           }
         });
       });
@@ -351,7 +363,7 @@ describe('Unit: CLI', function() {
           if (/win\d+/.test(process.platform) || options.watcher === 'watchman') {
             expect(output.length).to.equal(1, 'expected no extra output');
           } else {
-            expect(output.length).to.equal(2, 'expected no extra output');
+            expect(output.length).to.equal(3, 'expected no extra output');
           }
         });
       });

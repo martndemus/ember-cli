@@ -1,3 +1,5 @@
+/*jshint node:true*/
+
 module.exports = {
-  description: 'Generates a service and initializer for injections.'
+  description: 'Generates a service.'
 };

@@ -2,7 +2,6 @@
 
 var ember     = require('../helpers/ember');
 var expect    = require('chai').expect;
-var forEach   = require('lodash-node/compat/collections/forEach');
 var walkSync  = require('walk-sync');
 var glob      = require('glob');
 var Blueprint = require('../../lib/models/blueprint');
@@ -12,14 +11,17 @@ var root      = process.cwd();
 var util      = require('util');
 var conf      = require('../helpers/conf');
 var minimatch = require('minimatch');
-var remove    = require('lodash-node/compat/arrays/remove');
-var any       = require('lodash-node/compat/collections/some');
-var intersect = require('lodash-node/compat/arrays/intersection');
+var intersect = require('lodash/array/intersection');
+var remove    = require('lodash/array/remove');
+var forEach   = require('lodash/collection/forEach');
+var any       = require('lodash/collection/some');
 var EOL       = require('os').EOL;
 
 var defaultIgnoredFiles = Blueprint.ignoredFiles;
 
 describe('Acceptance: ember init', function() {
+  this.timeout(20000);
+
   before(function() {
     conf.setup();
   });
@@ -38,8 +40,6 @@ describe('Acceptance: ember init', function() {
   });
 
   afterEach(function() {
-    this.timeout(10000);
-
     return tmp.teardown('./tmp');
   });
 

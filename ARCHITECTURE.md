@@ -1,3 +1,7 @@
+## Architecture
+
+![embercli architecture](./assets/architecture/Ember-CLI architecture.png)
+
 ## Overview
 - **cli** parses args and calls the respective **command**
 - **command** calls a sequence of **tasks**
@@ -315,4 +319,4 @@ time intervals to [mitigate EBUSY errors on
 windows](https://github.com/isaacs/rimraf/blob/master/rimraf.js#L20-L27).
 Also, libraries can use asynchronicity to offload work onto worker threads. By
 providing an asynchronous API, fixes and optimizations can be implemented
-transparently without breaking API compatibilty.
+transparently without breaking API compatibility.

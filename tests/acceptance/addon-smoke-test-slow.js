@@ -21,26 +21,23 @@ var linkDependencies    = acceptance.linkDependencies;
 var cleanupRun          = acceptance.cleanupRun;
 
 describe('Acceptance: addon-smoke-test', function() {
+  this.timeout(450000);
 
   before(function() {
-    this.timeout(360000);
     return createTestTargets(addonName, {
       command: 'addon'
     });
   });
 
   after(function() {
-    this.timeout(15000);
     return teardownTestTargets();
   });
 
   beforeEach(function() {
-    this.timeout(360000);
     return linkDependencies(addonName);
   });
 
   afterEach(function() {
-    this.timeout(15000);
     return cleanupRun().then(function() {
       assertDirEmpty('tmp');
     });
@@ -60,13 +57,10 @@ describe('Acceptance: addon-smoke-test', function() {
   });
 
   it('ember addon foo, clean from scratch', function() {
-    this.timeout(450000);
     return runCommand(path.join('.', 'node_modules', 'ember-cli', 'bin', 'ember'), 'test');
   });
 
   it('ember addon without addon/ directory', function() {
-    this.timeout(450000);
-
     return remove('addon')
       .then(function() {
         return runCommand(path.join('.', 'node_modules', 'ember-cli', 'bin', 'ember'), 'server', '--port=54323','--live-reload=false', {
@@ -83,17 +77,21 @@ describe('Acceptance: addon-smoke-test', function() {
   });
 
   it('can render a component with a manually imported template', function() {
-    this.timeout(450000);
-
     return copyFixtureFiles('addon/component-with-template')
+      .then(function() {
+        var packageJsonPath = path.join(__dirname, '..', '..', 'tmp', addonName, 'package.json');
+        var packageJson = require(packageJsonPath);
+        packageJson.dependencies = packageJson.dependencies || {};
+        packageJson.dependencies['ember-cli-htmlbars'] = 'latest';
+
+        return fs.writeFileSync(packageJsonPath, JSON.stringify(packageJson));
+      })
       .then(function() {
         return runCommand(path.join('.', 'node_modules', 'ember-cli', 'bin', 'ember'), 'test');
       });
   });
 
   it('can add things to `{{content-for "head"}}` section', function() {
-    this.timeout(450000);
-
     return copyFixtureFiles('addon/content-for-head')
       .then(function() {
         return runCommand(path.join('.', 'node_modules', 'ember-cli', 'bin', 'ember'), 'build');
@@ -106,9 +104,26 @@ describe('Acceptance: addon-smoke-test', function() {
       });
   });
 
-  it('ember addon with addon/styles directory', function() {
-    this.timeout(450000);
+  it('build with only pod templates', function() {
+    return copyFixtureFiles('addon/pod-templates-only')
+      .then(function() {
+        var packageJsonPath = path.join(__dirname, '..', '..', 'tmp', addonName, 'package.json');
+        var packageJson = require(packageJsonPath);
+        packageJson.dependencies = packageJson.dependencies || {};
+        packageJson.dependencies['ember-cli-htmlbars'] = 'latest';
 
+        return fs.writeFileSync(packageJsonPath, JSON.stringify(packageJson));
+      }).then(function(){
+        return runCommand(path.join('.', 'node_modules', 'ember-cli', 'bin', 'ember'), 'build');
+      })
+      .then(function() {
+        var indexPath = path.join('dist', 'assets', 'vendor.js');
+        var contents = fs.readFileSync(indexPath, { encoding: 'utf8' });
+        expect(contents).to.contain('MY-COMPONENT-TEMPLATE-CONTENT');
+      });
+  });
+
+  it('ember addon with addon/styles directory', function() {
     return copyFixtureFiles('addon/with-styles')
       .then(function() {
         return runCommand(path.join('.', 'node_modules', 'ember-cli', 'bin', 'ember'), 'build');
@@ -122,8 +137,6 @@ describe('Acceptance: addon-smoke-test', function() {
   });
 
   it('ember addon with tests/dummy/public directory', function() {
-    this.timeout(450000);
-
     return copyFixtureFiles('addon/with-dummy-public')
       .then(function() {
         return runCommand(path.join('.', 'node_modules', 'ember-cli', 'bin', 'ember'), 'build');
@@ -138,8 +151,6 @@ describe('Acceptance: addon-smoke-test', function() {
 
   it('npm pack does not include unnecessary files', function() {
     console.log('    running the slow end-to-end it will take some time');
-    this.timeout(450000);
-
     var handleError = function(error, commandName) {
       if(error.code === 'ENOENT') {
         console.warn(chalk.yellow('      Your system does not provide ' + commandName + ' -> Skipped this test.'));
@@ -170,7 +181,7 @@ describe('Acceptance: addon-smoke-test', function() {
           resolve(output);
         });
       }).then(function(output) {
-        var unnecessaryFiles = ['.gitkeep', '.travis.yml', 'Brocfile.js', '.editorconfig', 'testem.json', '.ember-cli', 'bower.json', '.bowerrc'];
+        var unnecessaryFiles = ['.gitkeep', '.travis.yml', 'ember-cli-build.js', '.editorconfig', 'testem.json', '.ember-cli', 'bower.json', '.bowerrc'];
         var unnecessaryFolders = ['tests/', 'bower_components/'];
 
         unnecessaryFiles.concat(unnecessaryFolders).forEach(function(file) {
@@ -182,5 +193,40 @@ describe('Acceptance: addon-smoke-test', function() {
     }, function(error) {
       handleError(error, 'npm');
     });
+  });
+
+  function wait(time) {
+    return new Promise(function(resolve) {
+      setTimeout(function() {
+        resolve();
+      }, time);
+    });
+  }
+
+  it('doesn\'t fail to build new files', function() {
+    var testemOutput = '';
+    return runCommand(path.join('.', 'node_modules', 'ember-cli', 'bin', 'ember'), 'test', '--launch=PhantomJS', '--server', {
+      onOutput: function(string) {
+        testemOutput += string;
+      },
+      onChildSpawned: function(child) {
+        return wait(12000).then(function() {
+
+          return runCommand(path.join('.', 'node_modules', 'ember-cli', 'bin', 'ember'), 'generate', 'initializer', 'foo')
+          .then(function() {
+            return wait(5000);
+          })
+          .then(function() {
+            child.stdin.write('q'); // quit test server
+            child.stdin.end();
+            expect(testemOutput).to.contain('✔');
+            expect(testemOutput).to.not.contain('✘');
+          });
+
+        });
+
+      }
+    });
+
   });
 });

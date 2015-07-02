@@ -1,10 +1,14 @@
-var fs         = require('fs');
-var path       = require('path');
-var walkSync   = require('walk-sync');
-var stringUtil = require('../../lib/utilities/string');
-var assign     = require('lodash-node/modern/objects/assign');
-var uniq       = require('lodash-node/underscore/arrays/uniq');
-var date       = new Date();
+/*jshint node:true*/
+
+var fs          = require('fs');
+var existsSync  = require('exists-sync');
+var path        = require('path');
+var walkSync    = require('walk-sync');
+var stringUtil  = require('../../lib/utilities/string');
+var uniq        = require('lodash/array/uniq');
+var Blueprint   = require('../../lib/models/blueprint');
+var SilentError = require('silent-error');
+var date        = new Date();
 
 module.exports = {
   description: 'The default blueprint for ember-cli addons.',
@@ -17,13 +21,25 @@ module.exports = {
     contents.name = this.project.name();
     contents.description = this.description;
     contents.keywords = contents.keywords || [];
+    contents.dependencies = contents.dependencies || {};
+
+    // npm doesn't like it when we have something in both deps and devDeps
+    // and dummy app still uses it when in deps
+    contents.dependencies['ember-cli-babel'] = contents.devDependencies['ember-cli-babel'];
+    delete contents.devDependencies['ember-cli-babel'];
 
     if (contents.keywords.indexOf('ember-addon') === -1) {
       contents.keywords.push('ember-addon');
     }
 
-    contents['ember-addon'] = contents['ember-addon'] || {};
+    // add `ember-disable-prototype-extensions` to addons by default
+    contents.devDependencies['ember-disable-prototype-extensions'] = '^1.0.0';
 
+    // add `ember-try` to addons by default
+    contents.devDependencies['ember-try'] = '0.0.6';
+    contents.scripts.test = "ember try:testall";
+
+    contents['ember-addon'] = contents['ember-addon'] || {};
     contents['ember-addon'].configPath = 'tests/dummy/config';
 
     fs.writeFileSync(path.join(this.path, 'files', 'package.json'), JSON.stringify(contents, null, 2));
@@ -43,7 +59,7 @@ module.exports = {
     var bowerPath = path.join(this.path, 'files', 'bower.json');
 
     [packagePath, bowerPath].forEach(function(filePath) {
-      if (fs.existsSync(filePath)) {
+      if (existsSync(filePath)) {
         fs.unlinkSync(filePath);
       }
     });
@@ -69,7 +85,7 @@ module.exports = {
       addonNamespace: addonNamespace,
       emberCLIVersion: require('../../package').version,
       year: date.getFullYear()
-    }
+    };
   },
 
   files: function() {
@@ -98,12 +114,13 @@ module.exports = {
     '^public.*':     'tests/dummy/:path',
 
     '^addon-config/environment.js': 'config/environment.js',
+    '^addon-config/ember-try.js'  : 'config/ember-try.js',
 
     '^npmignore': '.npmignore'
   },
 
   fileMapper: function(path) {
-    for(pattern in this.fileMap) {
+    for (var pattern in this.fileMap) {
       if ((new RegExp(pattern)).test(path)) {
         return this.fileMap[pattern].replace(':path', path);
       }
@@ -114,10 +131,20 @@ module.exports = {
 
   srcPath: function(file) {
     var filePath = path.resolve(this.path, 'files', file);
-    if (fs.existsSync(filePath)) {
+    if (existsSync(filePath)) {
       return filePath;
     } else {
       return path.resolve(this._appBlueprint.path, 'files', file);
     }
+  },
+
+  normalizeEntityName: function(entityName) {
+    entityName = Blueprint.prototype.normalizeEntityName.apply(this, arguments);
+
+    if(this.project.isEmberCLIProject() && !this.project.isEmberCLIAddon()) {
+      throw new SilentError('Generating an addon in an existing ember-cli project is not supported.');
+    }
+
+    return entityName;
   }
 };

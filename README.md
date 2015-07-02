@@ -1,9 +1,16 @@
 
-## ember-cli [![Build Status][travis-badge]][travis-badge-url] [![Dependency Status][david-badge]][david-badge-url] [![Build status][appveyor-badge]][appveyor-badge-url]
+## ember-cli
+[![Build Status][travis-badge]][travis-badge-url]
+[![Dependency Status][david-badge]][david-badge-url]
+[![devDependency Status](https://david-dm.org/ember-cli/ember-cli/dev-status.svg)](https://david-dm.org/ember-cli/ember-cli#info=devDependencies)
+[![Build status][appveyor-badge]][appveyor-badge-url]
+[![Code Climate](https://codeclimate.com/github/ember-cli/ember-cli/badges/gpa.svg)](https://codeclimate.com/github/ember-cli/ember-cli)
+[![Test Coverage](https://codeclimate.com/github/ember-cli/ember-cli/badges/coverage.svg)](https://codeclimate.com/github/ember-cli/ember-cli)
+[![Inline docs](http://inch-ci.org/github/ember-cli/ember-cli.svg?branch=master)](http://inch-ci.org/github/ember-cli/ember-cli)
 
-An ember command line utility.
+The Ember.js command line utility.
 
-Supports node 0.10.5 and npm 2.1.8.
+Supports node 0.12.x and npm 2.6.x.
 
 ## Community
 * irc: #ember-cli on freenode
@@ -14,7 +21,7 @@ Supports node 0.10.5 and npm 2.1.8.
 
 
 ## Project Elements
-Additional components of this project which are used runtime in your application:
+Additional components of this project which are used at runtime in your application:
 * [ember-resolver](https://github.com/ember-cli/ember-resolver)
 * [loader](https://github.com/ember-cli/loader.js)
 * [ember-cli-shims](https://github.com/ember-cli/ember-cli-shims)
@@ -44,11 +51,11 @@ ember server
 
 If you upgrade an app running against Ember CLI master you will need to re-link to your checkout of Ember CLI by running `npm link ember-cli` in your project again.
 
-Please read the official [npm-link documentation](https://www.npmjs.org/doc/cli/npm-link.html) and the [npm-link cheatsheet](https://blog.nodejitsu.com/npm-cheatsheet/#Linking_any_npm_package_locally) for more information.
+Please read the official [npm-link documentation](https://www.npmjs.org/doc/cli/npm-link.html) and the [npm-link cheatsheet](http://browsenpm.org/help#linkinganynpmpackagelocally) for more information.
 
 ### Working with the tests
 
-Use `npm run autotest` to run the tests after every file change (Runs only fast tests). Use `npm test` to run them once.
+Use `npm test` to run the tests (Runs only fast tests).
 
 For a full test run which includes some very slow acceptance tests,
 please run: `npm run test-all`. Please note, this is what travis
@@ -63,7 +70,7 @@ Please read the official [mocha documentation](http://mochajs.org/) for more inf
 When running ember cli it could happen that a lack of file watches can occur. You will get an error message like:
 
 ```sh
-Serving on http://0.0.0.0:4200
+Serving on http://localhost:4200
 watch ENOSPC
 Error: watch ENOSPC
     at errnoException (fs.js:1019:11)
@@ -91,6 +98,10 @@ Use `npm run docs` to build HTML and JSON documentation with YUIDoc and place it
 
 [See `CONTRIBUTING.md`](https://github.com/ember-cli/ember-cli/blob/master/CONTRIBUTING.md)
 
+## Upgrading
+
+* [Change history of new Ember-CLI apps](https://github.com/kellyselden/ember-cli-output)
+* [Change history of new Ember-CLI addons](https://github.com/kellyselden/ember-addon-output)
 
 ## Donating
 

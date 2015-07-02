@@ -11,19 +11,24 @@ var stub     = require('../../helpers/stub').stub;
 describe('broccoli/ember-app', function() {
   var project, projectPath, emberApp, addonTreesForStub, addon;
 
-  beforeEach(function() {
-    projectPath = path.resolve(__dirname, '../../fixtures/addon/simple');
-    var packageContents = require(path.join(projectPath, 'package.json'));
+  function setupProject(rootPath) {
+    var packageContents = require(path.join(rootPath, 'package.json'));
 
-    project = new Project(projectPath, packageContents);
+    project = new Project(rootPath, packageContents);
     project.require = function() {
       return function() {};
     };
     project.initializeAddons = function() {
       this.addons = [];
     };
-  });
 
+    return project;
+  }
+
+  beforeEach(function() {
+    projectPath = path.resolve(__dirname, '../../fixtures/addon/simple');
+    project = setupProject(projectPath);
+  });
 
   describe('constructor', function() {
     it('should override project.configPath if configPath option is specified', function() {
@@ -46,7 +51,7 @@ describe('broccoli/ember-app', function() {
       expect(app.bowerDirectory).to.equal('bower_components');
     });
 
-    describe('_nofifyAddonIncluded', function() {
+    describe('_notifyAddonIncluded', function() {
       beforeEach(function() {
         project.initializeAddons = function() { };
         project.addons = [{name: 'custom-addon'}];
@@ -307,14 +312,57 @@ describe('broccoli/ember-app', function() {
           expect(addonTreesForStub.calledWith[0][0]).to.equal('app');
         });
 
-        it('styles calls addonTreesFor', function() {
+        it('styles calls addonTreesFor and merges with overwrite', function() {
           var trees = emberApp.styles();
 
           expect(addonTreesForStub.calledWith[0][0]).to.equal('styles');
           expect(true, trees.inputTrees[0].inputTree.inputTrees.indexOf('batman') !== -1, 'contains addon tree');
+          expect(trees.inputTrees[0].inputTree.options.overwrite).to.equal(true);
         });
       });
     });
+    describe('postprocessTree is called properly', function() {
+        var postprocessTreeStub;
+        beforeEach(function() {
+          emberApp = new EmberApp({
+            project: project
+          });
+
+          postprocessTreeStub = stub(emberApp, 'addonPostprocessTree', ['batman']);
+        });
+
+
+        it('styles calls addonTreesFor', function() {
+          emberApp.styles();
+
+          expect(postprocessTreeStub.calledWith[0][0]).to.equal('css');
+          expect(postprocessTreeStub.calledWith[0][1].description).to.equal('styles', 'should be called with consolidated tree');
+        });
+
+
+        it('template type is called', function() {
+          var oldLoad = emberApp.registry.load;
+          emberApp.registry.load = function(type) {
+            if (type === 'template'){
+              return [
+                {
+                  toTree: function() {
+                    return {
+                      description: 'template'
+                    };
+                  }
+                }];
+            } else {
+              return oldLoad.call(emberApp.registry, type);
+            }
+          };
+
+          emberApp._processedTemplatesTree();
+          expect(postprocessTreeStub.calledWith[0][0]).to.equal('template');
+          expect(postprocessTreeStub.calledWith[0][1].description).to.equal('template', 'should be called with consolidated tree');
+        });
+    });
+
     describe('toTree', function() {
       beforeEach(function() {
         addon = {
@@ -354,7 +402,7 @@ describe('broccoli/ember-app', function() {
           addon.postprocessTree.calledWith.map(function(args){
             return args[0];
           }).sort()
-        ).to.deep.equal(['all', 'js', 'test']);
+        ).to.deep.equal(['all', 'css', 'js', 'test']);
       });
 
     });
@@ -402,13 +450,67 @@ describe('broccoli/ember-app', function() {
       emberApp.import('vendor/es5-shim.js', {type: 'vendor', prepend: true});
       expect(emberApp.legacyFilesToAppend.indexOf('vendor/es5-shim.js')).to.equal(0);
     });
+    it('defaults to development if production is not set', function() {
+      process.env.EMBER_ENV = 'production';
+      emberApp = new EmberApp({
+      });
+      emberApp.import({
+        'development': 'vendor/jquery.js'
+      });
+      expect(emberApp.legacyFilesToAppend.indexOf('vendor/jquery.js')).to.equal(emberApp.legacyFilesToAppend.length -1);
+      process.env.EMBER_ENV = undefined;
+
+    });
+    it('honors explicitly set to null in environment', function() {
+      process.env.EMBER_ENV = 'production';
+      emberApp = new EmberApp({
+      });
+      emberApp.import({
+        'development': 'vendor/jquery.js',
+        'production':  null
+      });
+      expect(emberApp.legacyFilesToAppend.indexOf('vendor/jquery.js')).to.equal(-1);
+      process.env.EMBER_ENV = undefined;
+    });
   });
 
   describe('vendorFiles', function() {
     var defaultVendorFiles = [
-      'loader.js', 'jquery.js', 'handlebars.js', 'ember.js',
+      'loader.js', 'jquery.js', 'ember.js',
       'app-shims.js', 'ember-resolver.js', 'ember-load-initializers.js'
     ];
+
+    describe('handlebars.js', function() {
+      it('does not app.import handlebars if not present in bower.json', function() {
+        var app = new EmberApp({
+          project: project
+        });
+
+        expect(app.vendorFiles).not.to.include.keys('handlebars.js');
+      });
+
+      it('includes handlebars if present in bower.json', function() {
+        projectPath = path.resolve(__dirname, '../../fixtures/project-with-handlebars');
+        project = setupProject(projectPath);
+
+        var app = new EmberApp({
+          project: project
+        });
+
+        expect(app.vendorFiles).to.include.keys('handlebars.js');
+      });
+
+      it('includes handlebars if present in provided `vendorFiles`', function() {
+        var app = new EmberApp({
+          project: project,
+          vendorFiles: {
+            'handlebars.js': 'some/path/whatever.js'
+          }
+        });
+
+        expect(app.vendorFiles).to.include.keys('handlebars.js');
+      });
+    });
 
     it('defines vendorFiles by default', function() {
       emberApp = new EmberApp();

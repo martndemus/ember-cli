@@ -1,24 +1,15 @@
-var SilentError = require('../../lib/errors/silent');
+/*jshint node:true*/
+
+var SilentError = require('silent-error');
 var fs          = require('fs-extra');
-var inflection  = require('inflection');
 var path        = require('path');
-var EOL         = require('os').EOL;
+var chalk       = require('chalk');
 var EmberRouterGenerator = require('ember-router-generator');
 
 module.exports = {
   description: 'Generates a route and registers it with the router.',
 
   availableOptions: [
-    {
-      name: 'type',
-      type: String,
-      values: ['route', 'resource'],
-      default: 'route',
-      aliases:[
-        {'route': 'route'},
-        {'resource': 'resource'}
-      ]
-    },
     {
       name: 'path',
       type: String,
@@ -39,20 +30,27 @@ module.exports = {
           return 'template';
         }
         return options.dasherizedModuleName;
+      },
+      __root__: function(options) {
+        if (options.inRepoAddon) {
+          return path.join('lib', options.inRepoAddon, 'addon');
+        }
+
+        if (options.inDummy) {
+          return path.join('tests','dummy','app');
+        }
+
+        if (options.inAddon) {
+          return 'addon';
+        }
+
+        return 'app';
       }
     };
   },
 
-  beforeInstall: function(options) {
-    var type = options.type;
-
-    if (type && !/^(resource|route)$/.test(type)) {
-      throw new SilentError('Unknown route type "' + type + '". Should be "route" or "resource".');
-    }
-  },
-
   shouldTouchRouter: function(name) {
-    var isIndex = /index$/.test(name);
+    var isIndex = name === 'index';
     var isBasic = name === 'basic';
     var isApplication = name === 'application';
 
@@ -62,31 +60,26 @@ module.exports = {
   afterInstall: function(options) {
     var entity  = options.entity;
 
-    if (this.shouldTouchRouter(entity.name) && !options.dryRun) {
+    if (this.shouldTouchRouter(entity.name) && !options.dryRun && !options.project.isEmberCLIAddon() && !options.inRepoAddon) {
       addRouteToRouter(entity.name, {
-        type: options.type,
         root: options.project.root,
         path: options.path
       });
-    }
-  },
-
-  beforeUninstall: function(options) {
-    var type = options.type;
-
-    if (type && !/^(resource|route)$/.test(type)) {
-      throw new SilentError('Unknown route type "' + type + '". Should be "route" or "resource".');
+      this.ui.writeLine('updating router');
+      this._writeStatusToUI(chalk.green, 'add route', entity.name);
     }
   },
 
   afterUninstall: function(options) {
     var entity  = options.entity;
 
-    if (this.shouldTouchRouter(entity.name) && !options.dryRun) {
+    if (this.shouldTouchRouter(entity.name) && !options.dryRun && !options.project.isEmberCLIAddon() && !options.inRepoAddon) {
       removeRouteFromRouter(entity.name, {
-        type: options.type,
         root: options.project.root
       });
+
+      this.ui.writeLine('updating router');
+      this._writeStatusToUI(chalk.red, 'remove route', entity.name);
     }
   }
 };

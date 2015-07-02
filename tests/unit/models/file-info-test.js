@@ -11,6 +11,7 @@ var writeFile = Promise.denodeify(fs.writeFile);
 var root       = process.cwd();
 var tmproot    = path.join(root, 'tmp');
 var tmp        = require('tmp-sync');
+var assign     = require('lodash/object/assign');
 var tmpdir;
 var testOutputPath;
 
@@ -52,6 +53,22 @@ describe('Unit - FileInfo', function(){
     });
   });
 
+  it('rejects if templating throws', function(){
+    var templateWithUndefinedVariable = path.resolve(__dirname,
+      '../../fixtures/blueprints/with-templating/files/with-undefined-variable.txt');
+    var options = {};
+    assign(options, validOptions, { inputPath: templateWithUndefinedVariable });
+    var fileInfo = new FileInfo(options);
+
+    return fileInfo.render().then(function() {
+      throw new Error('FileInfo.render should reject if templating throws');
+    }).catch(function(e) {
+      if (!e.toString().match(/ReferenceError/)) {
+        throw e;
+      }
+    });
+  });
+
   it('does not explode when trying to template binary files', function() {
     var binary = path.resolve(__dirname, '../../fixtures/problem-binary.png');
 
@@ -77,8 +94,8 @@ describe('Unit - FileInfo', function(){
       expect(output.shift()).to.match(/---/);
       expect(output.shift()).to.match(/\+{3}/);
       expect(output.shift()).to.match(/.*/);
-      expect(output.shift()).to.match(/\+Howdy Billy/);
       expect(output.shift()).to.match(/-Something Old/);
+      expect(output.shift()).to.match(/\+Howdy Billy/);
     });
   });
 

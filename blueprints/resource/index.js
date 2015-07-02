@@ -1,6 +1,8 @@
+/*jshint node:true*/
+
 var Blueprint  = require('../../lib/models/blueprint');
 var Promise    = require('../../lib/ext/promise');
-var merge      = require('lodash-node/compat/objects/merge');
+var merge      = require('lodash/object/merge');
 var inflection = require('inflection');
 
 module.exports = {
@@ -52,7 +54,7 @@ module.exports = {
       }
     });
 
-    var routeOptions = merge({}, options, { type: 'resource' });
+    var routeOptions = merge({}, options);
 
     var self = this;
     return this._processBlueprint(type, 'model', modelOptions)
